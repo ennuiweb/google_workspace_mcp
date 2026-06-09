@@ -146,9 +146,7 @@ def test_origin_validation_trusts_any_vscode_webview_origin(monkeypatch):
 
     # A genuine browser web origin that is not configured is still rejected.
     assert (
-        client.get(
-            "/health", headers={"Origin": "https://evil.test"}
-        ).status_code
+        client.get("/health", headers={"Origin": "https://evil.test"}).status_code
         == 403
     )
 
