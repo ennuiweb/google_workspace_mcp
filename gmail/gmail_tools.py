@@ -1204,13 +1204,17 @@ async def _forward_gmail_message_impl(
         f"To: {original_to}"
     )
 
+    # Escape header values for the HTML forward block (these are meant to render
+    # as text, and may contain markup from the original message).
+    import html as html_module
+
     forward_header_html = (
         '<div style="color: #777;">'
         "---------- Forwarded message ---------<br/>"
-        f"From: {original_from}<br/>"
-        f"Date: {original_date}<br/>"
-        f"Subject: {original_subject}<br/>"
-        f"To: {original_to}"
+        f"From: {html_module.escape(original_from)}<br/>"
+        f"Date: {html_module.escape(original_date)}<br/>"
+        f"Subject: {html_module.escape(original_subject)}<br/>"
+        f"To: {html_module.escape(original_to)}"
         "</div>"
     )
 
@@ -1223,10 +1227,10 @@ async def _forward_gmail_message_impl(
                 user_message_html = f"<div>{forward_message}</div><br/>"
             else:
                 # Convert plain text to HTML (escape and preserve newlines)
-                import html as html_module
-
                 escaped = html_module.escape(forward_message)
-                user_message_html = f"<div>{escaped.replace(chr(10), '<br/>')}</div><br/>"
+                user_message_html = (
+                    f"<div>{escaped.replace(chr(10), '<br/>')}</div><br/>"
+                )
 
         forward_body = (
             f"{user_message_html}"
@@ -1257,10 +1261,14 @@ async def _forward_gmail_message_impl(
                     .get(userId="me", messageId=message_id, id=att["attachmentId"])
                     .execute
                 )
-                # Gmail returns URL-safe base64, convert to standard base64
+                # Gmail returns URL-safe base64 (often unpadded). Decode it
+                # tolerantly and re-encode as standard, padded base64 so the
+                # downstream base64.b64decode() in _prepare_gmail_message succeeds.
                 urlsafe_data = attachment_data.get("data", "")
-                # Convert from URL-safe to standard base64
-                standard_b64 = urlsafe_data.replace("-", "+").replace("_", "/")
+                padded = urlsafe_data + "=" * (-len(urlsafe_data) % 4)
+                standard_b64 = base64.b64encode(
+                    base64.urlsafe_b64decode(padded)
+                ).decode()
                 attachments_to_send.append(
                     {
                         "content": standard_b64,
@@ -1268,15 +1276,18 @@ async def _forward_gmail_message_impl(
                         "mime_type": att["mimeType"],
                     }
                 )
-                logger.info(f"[forward_gmail_message] Downloaded attachment: {att['filename']}")
+                logger.info(
+                    f"[forward_gmail_message] Downloaded attachment: {att['filename']}"
+                )
             except Exception as e:
                 logger.warning(
                     f"[forward_gmail_message] Failed to download attachment {att['filename']}: {e}"
                 )
 
-    # Prepare the forward subject
+    # Prepare the forward subject, avoiding a double prefix for common forward
+    # variants (e.g. "Fwd:", "FW:", "FWD:").
     forward_subject = original_subject
-    if not forward_subject.lower().startswith("fwd:"):
+    if not forward_subject.lower().lstrip().startswith(("fwd:", "fw:")):
         forward_subject = f"Fwd: {original_subject}"
 
     # Prepare and send the message

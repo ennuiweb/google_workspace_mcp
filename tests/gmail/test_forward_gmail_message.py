@@ -190,7 +190,11 @@ async def test_forward_without_attachments():
         to_addr="bob@example.com",
         text_body="Message body.",
         attachments=[
-            {"filename": "doc.pdf", "mimeType": "application/pdf", "attachmentId": "att1"}
+            {
+                "filename": "doc.pdf",
+                "mimeType": "application/pdf",
+                "attachmentId": "att1",
+            }
         ],
     )
     mock_service = create_mock_service(message, sent_message_id="fwd005")
@@ -218,7 +222,11 @@ async def test_forward_with_attachments():
         to_addr="bob@example.com",
         text_body="See attached.",
         attachments=[
-            {"filename": "report.pdf", "mimeType": "application/pdf", "attachmentId": "att1"},
+            {
+                "filename": "report.pdf",
+                "mimeType": "application/pdf",
+                "attachmentId": "att1",
+            },
             {"filename": "image.png", "mimeType": "image/png", "attachmentId": "att2"},
         ],
     )
