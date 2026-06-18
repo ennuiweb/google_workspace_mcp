@@ -1218,8 +1218,13 @@ async def _forward_gmail_message_impl(
         "</div>"
     )
 
+    # Use the HTML body when the original is HTML, or when the caller supplied an
+    # HTML note (so an explicit forward_message_format="html" is honored even for
+    # plain-text originals).
+    use_html = has_html or bool(forward_message and forward_message_format == "html")
+
     # Construct the forward body
-    if has_html:
+    if use_html:
         # Build HTML forward body
         user_message_html = ""
         if forward_message:
@@ -1232,12 +1237,20 @@ async def _forward_gmail_message_impl(
                     f"<div>{escaped.replace(chr(10), '<br/>')}</div><br/>"
                 )
 
+        # Preserve the original HTML when present; otherwise escape the plain-text
+        # original so it renders correctly inside the HTML forward block.
+        original_body_html = (
+            original_html
+            if has_html
+            else html_module.escape(original_text).replace(chr(10), "<br/>")
+        )
+
         forward_body = (
             f"{user_message_html}"
             f'<div style="border-left: 1px solid #ccc; padding-left: 10px; margin-left: 10px;">'
             f"{forward_header_html}"
             f"<br/>"
-            f"{original_html}"
+            f"{original_body_html}"
             f"</div>"
         )
         body_format = "html"
@@ -1251,6 +1264,7 @@ async def _forward_gmail_message_impl(
     attachments_to_send = []
     if include_attachments:
         attachment_metadata = _extract_attachments(payload)
+        failed_attachments = []
         for att in attachment_metadata:
             try:
                 # Download attachment content
@@ -1283,6 +1297,15 @@ async def _forward_gmail_message_impl(
                 logger.warning(
                     f"[forward_gmail_message] Failed to download attachment {att['filename']}: {e}"
                 )
+                failed_attachments.append(att["filename"])
+
+        # Fail loudly rather than silently delivering an incomplete forward when
+        # the caller asked for the original attachments to be preserved.
+        if failed_attachments:
+            raise Exception(
+                "Failed to include requested attachment(s): "
+                + ", ".join(failed_attachments)
+            )
 
     # Prepare the forward subject, avoiding a double prefix for common forward
     # variants (e.g. "Fwd:", "FW:", "FWD:").
@@ -1320,7 +1343,7 @@ async def _forward_gmail_message_impl(
 
 @server.tool()
 @handle_http_errors("forward_gmail_message", service_type="gmail")
-@require_google_service("gmail", GMAIL_SEND_SCOPE)
+@require_google_service("gmail", ["gmail_read", GMAIL_SEND_SCOPE])
 async def forward_gmail_message(
     service,
     message_id: str,

@@ -4,6 +4,7 @@ Unit tests for forward_gmail_message
 
 import pytest
 from unittest.mock import Mock
+from email import message_from_bytes
 import base64
 import sys
 import os
@@ -11,6 +12,26 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from gmail.gmail_tools import _forward_gmail_message_impl
+
+
+def get_sent_mime_message(mock_service):
+    """Decode the raw MIME message passed to messages().send()."""
+    raw = mock_service.users().messages().send.call_args.kwargs["body"]["raw"]
+    return message_from_bytes(base64.urlsafe_b64decode(raw))
+
+
+def get_body_and_attachments(mime_msg):
+    """Return (body_part, [attachment_parts]) for plain or multipart messages."""
+    if not mime_msg.is_multipart():
+        return mime_msg, []
+    parts = mime_msg.get_payload()
+    return parts[0], parts[1:]
+
+
+def get_body_text(mime_msg):
+    """Decode the text/body part of a sent MIME message to a string."""
+    body_part, _ = get_body_and_attachments(mime_msg)
+    return body_part.get_payload(decode=True).decode()
 
 
 def create_mock_message(
@@ -110,6 +131,17 @@ async def test_forward_simple_text_email():
     assert "fwd001" in result
     mock_service.users().messages().send.assert_called()
 
+    sent = get_sent_mime_message(mock_service)
+    assert sent["Subject"] == "Fwd: Hello"
+    assert sent["To"] == "recipient@example.com"
+    body_part, attachments = get_body_and_attachments(sent)
+    assert body_part.get_content_subtype() == "plain"
+    assert not attachments
+    body = get_body_text(sent)
+    assert "This is the body." in body
+    assert "Forwarded message" in body
+    assert "alice@example.com" in body
+
 
 @pytest.mark.asyncio
 async def test_forward_html_email():
@@ -131,6 +163,15 @@ async def test_forward_html_email():
 
     assert "Email forwarded" in result
     assert "fwd002" in result
+
+    sent = get_sent_mime_message(mock_service)
+    assert sent["Subject"] == "Fwd: HTML Test"
+    body_part, _ = get_body_and_attachments(sent)
+    assert body_part.get_content_subtype() == "html"
+    body = get_body_text(sent)
+    assert "<strong>HTML</strong>" in body
+    # Header values are HTML-escaped in the forward block (no raw "<" injection).
+    assert "Forwarded message" in body
 
 
 @pytest.mark.asyncio
@@ -179,6 +220,46 @@ async def test_forward_with_message_html():
 
     assert "Email forwarded" in result
     assert "fwd004" in result
+
+    sent = get_sent_mime_message(mock_service)
+    body_part, _ = get_body_and_attachments(sent)
+    assert body_part.get_content_subtype() == "html"
+    body = get_body_text(sent)
+    assert "<b>Note:</b> See below." in body
+    assert "Original HTML content." in body
+
+
+@pytest.mark.asyncio
+async def test_forward_plain_original_with_html_note():
+    """Plain-text original + HTML note should produce an HTML forward body."""
+    message = create_mock_message(
+        subject="Plain Original",
+        from_addr="alice@example.com",
+        to_addr="bob@example.com",
+        text_body="Line one\nLine two",
+    )
+    mock_service = create_mock_service(message, sent_message_id="fwd009")
+
+    result = await _forward_gmail_message_impl(
+        service=mock_service,
+        message_id="msgpqr",
+        to="recipient@example.com",
+        forward_message="<b>Heads up</b>",
+        forward_message_format="html",
+        user_google_email="me@example.com",
+    )
+
+    assert "Email forwarded" in result
+    assert "fwd009" in result
+
+    sent = get_sent_mime_message(mock_service)
+    body_part, _ = get_body_and_attachments(sent)
+    # HTML format must be honored even though the original was plain text.
+    assert body_part.get_content_subtype() == "html"
+    body = get_body_text(sent)
+    assert "<b>Heads up</b>" in body
+    # The plain-text original is escaped and newline-converted into the HTML body.
+    assert "Line one<br/>Line two" in body
 
 
 @pytest.mark.asyncio
@@ -231,9 +312,12 @@ async def test_forward_with_attachments():
         ],
     )
 
-    # Mock attachment data
-    att1_data = base64.urlsafe_b64encode(b"PDF content").decode()
-    att2_data = base64.urlsafe_b64encode(b"PNG content").decode()
+    # Mock attachment data. Use raw bytes that yield URL-safe chars (-/_) and an
+    # unpadded encoding to exercise the base64 normalization path.
+    att1_raw = b"PDF content \xfb\xff"
+    att2_raw = b"PNG content \xfb\xef"
+    att1_data = base64.urlsafe_b64encode(att1_raw).decode().rstrip("=")
+    att2_data = base64.urlsafe_b64encode(att2_raw).decode().rstrip("=")
     attachments_data = [{"data": att1_data}, {"data": att2_data}]
 
     mock_service = create_mock_service(
@@ -251,6 +335,16 @@ async def test_forward_with_attachments():
     assert "Email forwarded" in result
     assert "2 attachment(s)" in result
     assert "fwd006" in result
+
+    sent = get_sent_mime_message(mock_service)
+    _, attachments = get_body_and_attachments(sent)
+    assert len(attachments) == 2
+    filenames = [a.get_filename() for a in attachments]
+    assert filenames == ["report.pdf", "image.png"]
+    # Attachment payloads round-trip back to the original bytes despite the
+    # unpadded URL-safe input.
+    assert attachments[0].get_payload(decode=True) == att1_raw
+    assert attachments[1].get_payload(decode=True) == att2_raw
 
 
 @pytest.mark.asyncio
@@ -274,8 +368,61 @@ async def test_forward_subject_already_has_fwd():
     assert "Email forwarded" in result
     assert "fwd007" in result
 
-    # Verify send was called - the subject should not be "Fwd: Fwd: ..."
-    mock_service.users().messages().send.assert_called()
+    # The subject should not be double-prefixed ("Fwd: Fwd: ...").
+    sent = get_sent_mime_message(mock_service)
+    assert sent["Subject"] == "Fwd: Already forwarded"
+
+
+@pytest.mark.asyncio
+async def test_forward_subject_fw_variant_not_double_prefixed():
+    """Subjects using the 'FW:' variant should not be re-prefixed with 'Fwd:'."""
+    message = create_mock_message(
+        subject="FW: Quarterly numbers",
+        from_addr="alice@example.com",
+        to_addr="bob@example.com",
+        text_body="Numbers attached.",
+    )
+    mock_service = create_mock_service(message, sent_message_id="fwd010")
+
+    await _forward_gmail_message_impl(
+        service=mock_service,
+        message_id="msgstu",
+        to="recipient@example.com",
+        user_google_email="me@example.com",
+    )
+
+    sent = get_sent_mime_message(mock_service)
+    assert sent["Subject"] == "FW: Quarterly numbers"
+
+
+@pytest.mark.asyncio
+async def test_forward_attachment_download_failure_raises():
+    """A failed attachment download must abort rather than send a partial forward."""
+    message = create_mock_message(
+        subject="Has attachment",
+        from_addr="alice@example.com",
+        to_addr="bob@example.com",
+        text_body="See attached.",
+        attachments=[
+            {
+                "filename": "report.pdf",
+                "mimeType": "application/pdf",
+                "attachmentId": "att1",
+            }
+        ],
+    )
+    mock_service = create_mock_service(
+        message, attachments_data=[Exception("boom")], sent_message_id="fwd011"
+    )
+
+    with pytest.raises(Exception, match="Failed to include requested attachment"):
+        await _forward_gmail_message_impl(
+            service=mock_service,
+            message_id="msgvwx",
+            to="recipient@example.com",
+            include_attachments=True,
+            user_google_email="me@example.com",
+        )
 
 
 @pytest.mark.asyncio
@@ -300,3 +447,8 @@ async def test_forward_with_cc_bcc():
 
     assert "Email forwarded" in result
     assert "fwd008" in result
+
+    sent = get_sent_mime_message(mock_service)
+    assert sent["To"] == "recipient@example.com"
+    assert sent["Cc"] == "cc@example.com"
+    assert sent["Bcc"] == "bcc@example.com"
