@@ -250,6 +250,9 @@ uv run main.py --transport streamable-http --tools gmail drive calendar
 | `WORKSPACE_MCP_TRANSPORT` | | `stdio` or `streamable-http`; used when `--transport` is not passed |
 | `WORKSPACE_MCP_HTTP_PORT` | | Advanced legacy-stdio sidecar `/mcp` port for local `workspace-cli` access. Disabled when empty. Binds to `127.0.0.1` only and is accessible to local processes. |
 | `WORKSPACE_EXTERNAL_URL` | | External URL for reverse proxy setups |
+| `WORKSPACE_MCP_BRAND_NAME` | | OAuth 2.1 consent-page server name — default FastMCP's name |
+| `WORKSPACE_MCP_BRAND_ICON_URL` | | OAuth 2.1 consent-page logo (hosted URL or `data:` URI), shown at 64px wide — default FastMCP's logo |
+| `WORKSPACE_MCP_BRAND_WEBSITE_URL` | | OAuth 2.1 consent-page website link |
 | `WORKSPACE_ATTACHMENT_DIR` | | Downloaded attachments dir and default trusted local attachment directory — default `~/.workspace-mcp/attachments/` |
 | `WORKSPACE_MCP_URL` | | Remote MCP endpoint URL for CLI |
 | `ALLOWED_FILE_DIRS` | | Colon-separated allowlist for local file reads |
