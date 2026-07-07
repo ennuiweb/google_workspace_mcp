@@ -32,6 +32,7 @@ from gappsscript.apps_script_tools import (
     _get_version_impl,
     _get_script_metrics_impl,
     _generate_trigger_code_impl,
+    manage_deployment,
     run_script_function,
 )
 
@@ -309,6 +310,39 @@ async def test_update_deployment_with_version_number():
 
     assert "Version: 2" in result
     assert "v2 - updated layout" in result
+
+
+@pytest.mark.asyncio
+async def test_manage_deployment_update_allows_version_number_without_description():
+    """The public update branch allows roll-forward updates without a description."""
+    mock_service = Mock()
+    mock_response = {
+        "deploymentId": "deploy123",
+        "deploymentConfig": {
+            "scriptId": "test123",
+            "versionNumber": 2,
+        },
+    }
+    mock_service.projects().deployments().update().execute.return_value = mock_response
+
+    undecorated_manage_deployment = manage_deployment.__wrapped__.__wrapped__
+    result = await undecorated_manage_deployment(
+        service=mock_service,
+        user_google_email="test@example.com",
+        action="update",
+        script_id="test123",
+        deployment_id="deploy123",
+        version_number=2,
+    )
+
+    _, update_kwargs = mock_service.projects().deployments().update.call_args
+    assert update_kwargs["body"] == {
+        "deploymentConfig": {
+            "scriptId": "test123",
+            "versionNumber": 2,
+        }
+    }
+    assert "Version: 2" in result
 
 
 @pytest.mark.asyncio

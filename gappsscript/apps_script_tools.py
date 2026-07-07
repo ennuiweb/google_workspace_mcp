@@ -542,7 +542,8 @@ async def manage_deployment(
         action: Action to perform - "create", "update", or "delete"
         script_id: The script project ID
         deployment_id: The deployment ID (required for update and delete)
-        description: Deployment description (required for create and update)
+        description: Deployment description (required for create; optional for update
+            when version_number is supplied)
         version_description: Optional version description (for create only)
         version_number: Version number to point the deployment at (for update only).
             Required to roll a deployment forward to a newly created script version.
@@ -560,8 +561,11 @@ async def manage_deployment(
     elif action == "update":
         if not deployment_id:
             raise ValueError("deployment_id is required for update action")
-        if description is None or description.strip() == "":
-            raise ValueError("description is required for update action")
+        has_description = description is not None and description.strip() != ""
+        if not has_description and version_number is None:
+            raise ValueError(
+                "description or version_number is required for update action"
+            )
         return await _update_deployment_impl(
             service,
             user_google_email,
