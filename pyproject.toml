@@ -12,7 +12,8 @@ license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
  "fastapi>=0.115.12",
- "fastmcp>=3.4.2",
+ "fastmcp>=3.4.4",
+ "mcp>=1.28.1",
  "google-api-python-client>=2.168.0",
  "google-auth-httplib2>=0.2.0",
  "google-auth-oauthlib>=1.2.2",
@@ -121,6 +122,10 @@ dev = [
 
 [tool.setuptools]
 py-modules = [ "fastmcp_server", "main"]
+
+[tool.uv.sources]
+fastmcp = { git = "https://github.com/ennuiweb/fastmcp.git", rev = "1ac9717e3aa6c990e69c61751f10e590e2b97a8f" }
+mcp = { git = "https://github.com/ennuiweb/python-sdk.git", rev = "11869e0ab5977d5ced8f13747af6e396599d0b5b" }
 
 [tool.setuptools.packages.find]
 where = ["."]

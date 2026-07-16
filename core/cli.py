@@ -18,6 +18,7 @@ import logging
 import os
 import stat
 import sys
+import time
 from typing import Any
 
 from cryptography.fernet import Fernet
@@ -68,21 +69,51 @@ def _build_oauth() -> OAuth:
     return OAuth(token_storage=storage)
 
 
-async def _list_tools(url: str) -> None:
+async def _list_tools(
+    url: str,
+    *,
+    use_auth: bool = True,
+    timeout: float = 30,
+    json_output: bool = False,
+) -> None:
     """Connect, authenticate once, and print available tools."""
+    started = time.monotonic()
     try:
-        auth = _build_oauth()
+        auth = _build_oauth() if use_auth else None
+
+        async def connect_and_list() -> list[Any]:
+            async with Client(url, auth=auth) as client:
+                return list(await client.list_tools())
+
+        tools = await asyncio.wait_for(connect_and_list(), timeout=timeout)
     except Exception as e:
+        if json_output:
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error_type": type(e).__name__,
+                        "duration_seconds": round(time.monotonic() - started, 3),
+                    }
+                )
+            )
+        else:
+            print(f"Error: failed to list tools ({type(e).__name__})", file=sys.stderr)
+        raise SystemExit(1) from e
+
+    if json_output:
         print(
-            f"Error: failed to initialize OAuth ({type(e).__name__})", file=sys.stderr
+            json.dumps(
+                {
+                    "ok": True,
+                    "tool_count": len(tools),
+                    "tool_names": sorted(tool.name for tool in tools),
+                    "duration_seconds": round(time.monotonic() - started, 3),
+                }
+            )
         )
-        sys.exit(1)
-    try:
-        async with Client(url, auth=auth) as client:
-            tools = await client.list_tools()
-    except Exception as e:
-        print(f"Error: failed to list tools ({type(e).__name__})", file=sys.stderr)
-        sys.exit(1)
+        return
+
     for tool in tools:
         desc = (tool.description or "").split("\n")[0]
         print(f"  {tool.name:40s} {desc}")
@@ -125,6 +156,22 @@ def main() -> None:
         default=os.getenv("WORKSPACE_MCP_URL", DEFAULT_URL),
         help=f"MCP server URL (default: {DEFAULT_URL})",
     )
+    parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        help="Connect without client OAuth (for an internal trusted probe)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=30,
+        help="Maximum connection and command duration in seconds (default: 30)",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON (supported by list)",
+    )
 
     sub = parser.add_subparsers(dest="command")
 
@@ -141,7 +188,14 @@ def main() -> None:
         sys.exit(1)
 
     if args.command == "list":
-        asyncio.run(_list_tools(args.url))
+        asyncio.run(
+            _list_tools(
+                args.url,
+                use_auth=not args.no_auth,
+                timeout=args.timeout,
+                json_output=args.json,
+            )
+        )
     elif args.command == "call":
         asyncio.run(_call_tool(args.url, args.tool, args.args))
 

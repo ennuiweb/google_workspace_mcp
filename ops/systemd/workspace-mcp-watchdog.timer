@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the Workspace MCP protocol watchdog every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=workspace-mcp-watchdog.service
+
+[Install]
+WantedBy=timers.target

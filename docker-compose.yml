@@ -1,16 +1,60 @@
 services:
-  gws_mcp:
+  workspace-business-mcp:
     build: .
-    container_name: gws_mcp
-    ports:
-      - "8000:8000"
+    container_name: workspace-business-mcp
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env.business
     environment:
-      - GOOGLE_MCP_CREDENTIALS_DIR=/app/store_creds
+      FASTMCP_STREAMABLE_HTTP_SESSION_IDLE_TIMEOUT: "900"
+    ports:
+      - "127.0.0.1:8802:8000"
     volumes:
       - ./client_secret.json:/app/client_secret.json:ro
-      - store_creds:/app/store_creds:rw
-    env_file:
-      - .env
+      - ./business/data:/data
+    entrypoint: [".venv/bin/python", "main.py"]
+    command: ["--transport", "streamable-http", "--single-user", "--tools", "gmail", "drive", "docs", "sheets", "contacts"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    stop_grace_period: 30s
+    mem_limit: 768m
+    cpus: 1.0
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-volumes:
-  store_creds:
+  workspace-personal-mcp:
+    build: .
+    container_name: workspace-personal-mcp
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env.personal
+    environment:
+      FASTMCP_STREAMABLE_HTTP_SESSION_IDLE_TIMEOUT: "900"
+    ports:
+      - "127.0.0.1:8803:8000"
+    volumes:
+      - ./client_secret.json:/app/client_secret.json:ro
+      - ./personal/data:/data
+    entrypoint: [".venv/bin/python", "main.py"]
+    command: ["--transport", "streamable-http", "--single-user", "--tools", "gmail", "drive", "docs", "sheets", "slides", "calendar", "tasks", "contacts"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    stop_grace_period: 30s
+    mem_limit: 768m
+    cpus: 1.0
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"

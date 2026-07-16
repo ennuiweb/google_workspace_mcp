@@ -1,0 +1,20 @@
+[Unit]
+Description=Protocol-level Google Workspace MCP health check and bounded recovery
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/workspace-mcp-watchdog
+StateDirectory=workspace-mcp-watchdog
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/workspace-mcp-watchdog
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

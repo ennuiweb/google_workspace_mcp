@@ -39,6 +39,10 @@ mcp_server_debug.log
 .serena/
 Caddyfile
 ecosystem.config.cjs
+business/data/
+personal/data/
+ops/state/
+docker-compose.yml.backup*
 
 # ---- Agent instructions (not for distribution) -------------------------
 .github/instructions/

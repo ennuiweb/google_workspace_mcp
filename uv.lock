@@ -2,7 +2,10 @@ version = 1
 revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
-    "python_full_version >= '3.13'",
+    "python_full_version >= '3.14' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and sys_platform != 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32'",
+    "python_full_version == '3.13.*' and sys_platform != 'win32'",
     "python_full_version < '3.13'",
 ]
 
@@ -507,20 +510,16 @@ wheels = [
 
 [[package]]
 name = "fastmcp"
-version = "3.4.2"
-source = { registry = "https://pypi.org/simple" }
+version = "3.4.5.dev1+1ac9717e"
+source = { git = "https://github.com/ennuiweb/fastmcp.git?rev=1ac9717e3aa6c990e69c61751f10e590e2b97a8f#1ac9717e3aa6c990e69c61751f10e590e2b97a8f" }
 dependencies = [
     { name = "fastmcp-slim", extra = ["client", "server"] },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/29/18/46beaec18c9f86a599ae3f9cdf6677dd6b50240cfd844d18233710b47f13/fastmcp-3.4.2.tar.gz", hash = "sha256:b468722946fc467c3796a6572f7a14d93d48c014cf8fea12910245220cbbe4e1", size = 28756849, upload-time = "2026-06-06T01:30:35.694Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/4d/8b1ba42251160e11ca34686344572121432c23a082d56ef6bbdec5888fc1/fastmcp-3.4.2-py3-none-any.whl", hash = "sha256:c87a62b029f0c5400ada85f683629345d2466c39169f0cb853e487b2f7308c08", size = 8018, upload-time = "2026-06-06T01:30:38.118Z" },
 ]
 
 [[package]]
 name = "fastmcp-slim"
-version = "3.4.2"
-source = { registry = "https://pypi.org/simple" }
+version = "3.4.5.dev1+1ac9717e"
+source = { git = "https://github.com/ennuiweb/fastmcp.git?subdirectory=fastmcp_slim&rev=1ac9717e3aa6c990e69c61751f10e590e2b97a8f#1ac9717e3aa6c990e69c61751f10e590e2b97a8f" }
 dependencies = [
     { name = "platformdirs" },
     { name = "pydantic", extra = ["email"] },
@@ -528,10 +527,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "rich" },
     { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a3/2e/d627b28b7403ecc526991ef732921b08bde010006e6148635f053fd29f4c/fastmcp_slim-3.4.2.tar.gz", hash = "sha256:290646e0955a516235a317151034559aa48336cb843d3f006131aedad8759bb4", size = 576291, upload-time = "2026-06-06T01:30:12.553Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f7/58/22afebf18df7260b09148199cbeb90cdcc4b3a4e1b5d7460e3591c3a7add/fastmcp_slim-3.4.2-py3-none-any.whl", hash = "sha256:bdc72492212681ca502755fa8acc0457f559295da1fc3dfc0599adc1c04b82f3", size = 749195, upload-time = "2026-06-06T01:30:11.22Z" },
 ]
 
 [package.optional-dependencies]
@@ -976,8 +971,8 @@ wheels = [
 
 [[package]]
 name = "mcp"
-version = "1.27.0"
-source = { registry = "https://pypi.org/simple" }
+version = "1.28.2.dev6+11869e0"
+source = { git = "https://github.com/ennuiweb/python-sdk.git?rev=11869e0ab5977d5ced8f13747af6e396599d0b5b#11869e0ab5977d5ced8f13747af6e396599d0b5b" }
 dependencies = [
     { name = "anyio" },
     { name = "httpx" },
@@ -993,10 +988,6 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
     { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8b/eb/c0cfc62075dc6e1ec1c64d352ae09ac051d9334311ed226f1f425312848a/mcp-1.27.0.tar.gz", hash = "sha256:d3dc35a7eec0d458c1da4976a48f982097ddaab87e278c5511d5a4a56e852b83", size = 607509, upload-time = "2026-04-02T14:48:08.88Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9c/46/f6b4ad632c67ef35209a66127e4bddc95759649dd595f71f13fba11bdf9a/mcp-1.27.0-py3-none-any.whl", hash = "sha256:5ce1fa81614958e267b21fb2aa34e0aea8e2c6ede60d52aba45fd47246b4d741", size = 215967, upload-time = "2026-04-02T14:48:07.24Z" },
 ]
 
 [[package]]
@@ -2236,6 +2227,7 @@ dependencies = [
     { name = "google-auth-oauthlib" },
     { name = "httpx" },
     { name = "markdown-it-py" },
+    { name = "mcp" },
     { name = "py-key-value-aio" },
     { name = "pyjwt" },
     { name = "pypdf" },
@@ -2307,7 +2299,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=48.0.1" },
     { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "fastapi", specifier = ">=0.115.12" },
-    { name = "fastmcp", specifier = ">=3.4.2" },
+    { name = "fastmcp", git = "https://github.com/ennuiweb/fastmcp.git?rev=1ac9717e3aa6c990e69c61751f10e590e2b97a8f" },
     { name = "google-api-python-client", specifier = ">=2.168.0" },
     { name = "google-auth-httplib2", specifier = ">=0.2.0" },
     { name = "google-auth-oauthlib", specifier = ">=1.2.2" },
@@ -2316,6 +2308,7 @@ requires-dist = [
     { name = "google-cloud-storage", marker = "extra == 'test'", specifier = ">=2.18.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "markdown-it-py", specifier = ">=3.0.0" },
+    { name = "mcp", git = "https://github.com/ennuiweb/python-sdk.git?rev=11869e0ab5977d5ced8f13747af6e396599d0b5b" },
     { name = "py-key-value-aio", specifier = ">=0.3.0" },
     { name = "py-key-value-aio", extras = ["filetree"], marker = "extra == 'disk'", specifier = ">=0.3.0" },
     { name = "py-key-value-aio", extras = ["valkey"], marker = "extra == 'valkey'", specifier = ">=0.3.0" },
