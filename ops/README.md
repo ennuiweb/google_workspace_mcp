@@ -30,6 +30,8 @@ Useful production checks:
 docker compose ps
 docker exec workspace-business-mcp .venv/bin/workspace-cli --url http://127.0.0.1:8000/mcp --no-auth --timeout 30 --json list
 docker exec workspace-personal-mcp .venv/bin/workspace-cli --url http://127.0.0.1:8000/mcp --no-auth --timeout 30 --json list
+docker exec workspace-business-mcp .venv/bin/workspace-cli --url http://127.0.0.1:8000/mcp --no-auth --timeout 30 call list_gmail_labels
+docker exec workspace-personal-mcp .venv/bin/workspace-cli --url http://127.0.0.1:8000/mcp --no-auth --timeout 30 call list_calendars
 systemctl status workspace-mcp-watchdog.timer
 journalctl -u workspace-mcp-watchdog.service --since today
 ```

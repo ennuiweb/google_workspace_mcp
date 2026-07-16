@@ -120,7 +120,14 @@ async def _list_tools(
     print(f"\n{len(tools)} tools available")
 
 
-async def _call_tool(url: str, tool_name: str, raw_args: list[str]) -> None:
+async def _call_tool(
+    url: str,
+    tool_name: str,
+    raw_args: list[str],
+    *,
+    use_auth: bool = True,
+    timeout: float = 30,
+) -> None:
     """Connect, authenticate once, call a single tool, and print the result."""
     kwargs: dict[str, Any] = {}
     for arg in raw_args:
@@ -133,17 +140,23 @@ async def _call_tool(url: str, tool_name: str, raw_args: list[str]) -> None:
         except json.JSONDecodeError:
             kwargs[k] = v
 
-    async with Client(url, auth=_build_oauth()) as client:
-        result = await client.call_tool(tool_name, kwargs)
-        for block in result.content:
-            if hasattr(block, "text"):
-                try:
-                    parsed = json.loads(block.text)
-                    print(json.dumps(parsed, indent=2))
-                except (json.JSONDecodeError, TypeError):
-                    print(block.text)
-            else:
-                print(block)
+    async def connect_and_call() -> Any:
+        auth = _build_oauth() if use_auth else None
+        async with Client(url, auth=auth) as client:
+            return await client.call_tool(tool_name, kwargs)
+
+    result = await asyncio.wait_for(connect_and_call(), timeout=timeout)
+    if result.is_error:
+        raise RuntimeError(f"MCP tool reported an error: {tool_name}")
+    for block in result.content:
+        if hasattr(block, "text"):
+            try:
+                parsed = json.loads(block.text)
+                print(json.dumps(parsed, indent=2))
+            except (json.JSONDecodeError, TypeError):
+                print(block.text)
+        else:
+            print(block)
 
 
 def main() -> None:
@@ -197,7 +210,15 @@ def main() -> None:
             )
         )
     elif args.command == "call":
-        asyncio.run(_call_tool(args.url, args.tool, args.args))
+        asyncio.run(
+            _call_tool(
+                args.url,
+                args.tool,
+                args.args,
+                use_auth=not args.no_auth,
+                timeout=args.timeout,
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -43,6 +43,7 @@ business/data/
 personal/data/
 ops/state/
 docker-compose.yml.backup*
+docker-compose.yml.bak-*
 
 # ---- Agent instructions (not for distribution) -------------------------
 .github/instructions/

@@ -53,6 +53,13 @@ for service in workspace-personal-mcp workspace-business-mcp; do
   [[ $(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$service") == healthy ]]
   docker exec "$service" .venv/bin/workspace-cli \
     --url http://127.0.0.1:8000/mcp --no-auth --timeout 30 --json list
+  if [[ $service == workspace-personal-mcp ]]; then
+    smoke_tool=list_calendars
+  else
+    smoke_tool=list_gmail_labels
+  fi
+  docker exec "$service" .venv/bin/workspace-cli \
+    --url http://127.0.0.1:8000/mcp --no-auth --timeout 30 call "$smoke_tool"
   active_service=
 done
 

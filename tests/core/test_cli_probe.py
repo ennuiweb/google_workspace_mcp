@@ -23,6 +23,14 @@ class FakeClient:
             SimpleNamespace(name="a_tool", description="A"),
         ]
 
+    async def call_tool(self, name, arguments):
+        assert name == "read_tool"
+        assert arguments == {"limit": 2}
+        return SimpleNamespace(
+            is_error=False,
+            content=[SimpleNamespace(text='{"result": "ok"}')],
+        )
+
 
 @pytest.mark.asyncio
 async def test_internal_json_probe_skips_oauth(monkeypatch, capsys):
@@ -55,3 +63,20 @@ async def test_probe_failure_is_machine_readable(monkeypatch, capsys):
     assert payload["ok"] is False
     assert payload["error_type"] == "RuntimeError"
     assert "secret detail" not in str(payload)
+
+
+@pytest.mark.asyncio
+async def test_internal_call_skips_oauth(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "Client", FakeClient)
+    monkeypatch.setattr(
+        cli, "_build_oauth", lambda: pytest.fail("OAuth should not be initialized")
+    )
+
+    await cli._call_tool(
+        "http://localhost/mcp",
+        "read_tool",
+        ["limit=2"],
+        use_auth=False,
+    )
+
+    assert cli.json.loads(capsys.readouterr().out) == {"result": "ok"}
