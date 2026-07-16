@@ -20,6 +20,11 @@ if [[ -n ${EXPECTED_REV:-} ]] && [[ $(git rev-parse HEAD) != "$EXPECTED_REV" ]];
 fi
 
 docker compose config --quiet
+available_kib=$(df --output=avail / | tail -n 1)
+if ((available_kib < 2097152)); then
+  echo "Refusing to build with less than 2 GiB free on the root filesystem" >&2
+  exit 1
+fi
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 declare -A old_images
 declare -A image_refs

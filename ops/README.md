@@ -12,7 +12,7 @@ The shallow `/health` endpoint remains a Docker readiness check. It is intention
 
 ## Deploy
 
-Before production rollout, run the unit suite and build the image. Preserve the current revision and image ID for rollback. Roll out personal first, verify its protocol probe and a read-only Google tool, then repeat for business.
+Before production rollout, run the unit suite and build the image. Preserve the current revision and image ID for rollback. Roll out personal first, verify its protocol probe and a read-only Google tool, then repeat for business. Start the host rollout through the transient systemd wrapper so an SSH disconnect cannot leave a recreated container stopped.
 
 ```bash
 uv sync --locked --extra dev
@@ -20,6 +20,7 @@ uv run pytest -m "not integration"
 docker compose config --quiet
 docker compose build
 
+sudo EXPECTED_REV=$(git rev-parse HEAD) ./ops/start-deploy-hetzner.sh /opt/google-workspace-mcp
 sudo ./ops/install-watchdog.sh /opt/google-workspace-mcp
 sudo /usr/local/sbin/workspace-mcp-watchdog
 ```
@@ -35,6 +36,8 @@ docker exec workspace-personal-mcp .venv/bin/workspace-cli --url http://127.0.0.
 systemctl status workspace-mcp-watchdog.timer
 journalctl -u workspace-mcp-watchdog.service --since today
 ```
+
+The deploy wrapper prints a transient unit name. Follow that unit with `journalctl -fu <unit>` and require `Result=success` plus `ExecMainStatus=0` before treating the rollout as complete.
 
 ## Rollback
 
