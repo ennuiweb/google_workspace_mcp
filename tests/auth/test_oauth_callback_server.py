@@ -294,3 +294,40 @@ def test_oauth_callback_missing_state_fallback_follows_single_user_mode(monkeypa
 
     assert response.status_code == 200
     assert calls[-1]["allow_missing_state_fallback"] is True
+
+
+def test_stdio_attachment_route_requires_signature_in_external_url_mode(monkeypatch):
+    file_id = "123e4567-e89b-12d3-a456-426614174000"
+    monkeypatch.setenv("WORKSPACE_EXTERNAL_URL", "https://mcp.example.test")
+    monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "test-secret")
+
+    class DummyStorage:
+        def get_attachment_metadata(self, _file_id):
+            raise AssertionError("storage must not be queried without a signature")
+
+    monkeypatch.setattr(
+        "core.attachment_storage.get_attachment_storage", lambda: DummyStorage()
+    )
+    server = oauth_callback_server.MinimalOAuthServer(8000, "http://localhost")
+    response = TestClient(server.app).get(f"/attachments/{file_id}")
+
+    assert response.status_code == 403
+    assert response.headers["cache-control"] == "private, no-store"
+
+
+def test_stdio_attachment_route_allows_unsigned_local_urls(monkeypatch):
+    file_id = "123e4567-e89b-12d3-a456-426614174000"
+    monkeypatch.delenv("WORKSPACE_EXTERNAL_URL", raising=False)
+
+    class DummyStorage:
+        def get_attachment_metadata(self, _file_id):
+            return None
+
+    monkeypatch.setattr(
+        "core.attachment_storage.get_attachment_storage", lambda: DummyStorage()
+    )
+    server = oauth_callback_server.MinimalOAuthServer(8000, "http://localhost")
+    response = TestClient(server.app).get(f"/attachments/{file_id}")
+
+    assert response.status_code == 404
+    assert response.headers["cache-control"] == "private, no-store"

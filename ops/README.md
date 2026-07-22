@@ -39,6 +39,17 @@ journalctl -u workspace-mcp-watchdog.service --since today
 
 The deploy wrapper prints a transient unit name. Follow that unit with `journalctl -fu <unit>` and require `Result=success` plus `ExecMainStatus=0` before treating the rollout as complete.
 
+## External attachment downloads
+
+Temporary Drive and Gmail downloads for remote MCP clients use short-lived signed URLs. Set these host-only values in both `.env.business` and `.env.personal` (never commit them):
+
+```dotenv
+WORKSPACE_EXTERNAL_URL=https://<account-public-origin>
+WORKSPACE_ATTACHMENT_SIGNING_SECRET=<independent high-entropy secret>
+```
+
+Nginx must route `^~ /attachments/` directly to that account's loopback backend, rather than through `mcp-auth-proxy`; the application validates the signed URL before serving a file. Preserve HTTPS, set `access_log off` for this bearer-token route, and do not use a shared signing secret between the business and personal services. Attachment links expire after five minutes, while stored files remain temporary and expire independently.
+
 ## Rollback
 
 Checkout the recorded pre-deploy revision, restore its Compose file if necessary, rebuild, and recreate only the affected service. Do not delete or replace `business/data`, `personal/data`, `.env.business`, `.env.personal`, or `client_secret.json`; those are host-owned state and secrets.

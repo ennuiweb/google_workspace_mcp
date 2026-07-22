@@ -1,8 +1,17 @@
 """Tests for filename handling in core.attachment_storage."""
 
+import time
 import unicodedata
+from urllib.parse import parse_qs, urlparse
 
-from core.attachment_storage import sanitize_attachment_filename
+import pytest
+
+from core.attachment_storage import (
+    _attachment_signature,
+    get_attachment_url,
+    sanitize_attachment_filename,
+    validate_attachment_url_signature,
+)
 
 # Built via chr() so the source stays pure ASCII and the exact code points are
 # unambiguous (these characters are visually indistinguishable from a space).
@@ -47,3 +56,38 @@ class TestSanitizeAttachmentFilename:
             sep = chr(cp)
             assert unicodedata.category(sep) == "Zs"
             assert sanitize_attachment_filename(f"a{sep}b.txt") == "a b.txt"
+
+
+class TestExternalAttachmentUrls:
+    file_id = "123e4567-e89b-12d3-a456-426614174000"
+
+    def test_external_url_is_signed_and_short_lived(self, monkeypatch):
+        monkeypatch.setenv("WORKSPACE_EXTERNAL_URL", "https://mcp.example.test/")
+        monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "test-secret")
+
+        url = get_attachment_url(self.file_id)
+        parsed = urlparse(url)
+        query = parse_qs(parsed.query)
+
+        assert parsed.scheme == "https"
+        assert parsed.path == f"/attachments/{self.file_id}"
+        assert set(query) == {"expires", "signature"}
+        assert validate_attachment_url_signature(
+            self.file_id, query["expires"][0], query["signature"][0]
+        )
+        assert int(query["expires"][0]) - int(time.time()) <= 300
+
+    def test_external_url_without_secret_is_not_issued(self, monkeypatch):
+        monkeypatch.setenv("WORKSPACE_EXTERNAL_URL", "https://mcp.example.test")
+        monkeypatch.delenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", raising=False)
+
+        with pytest.raises(RuntimeError, match="not configured"):
+            get_attachment_url(self.file_id)
+
+    def test_signature_rejects_expired_and_noncanonical_ids(self, monkeypatch):
+        monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "test-secret")
+        expires = int(time.time()) - 1
+        signature = _attachment_signature(self.file_id, expires, b"test-secret")
+
+        assert not validate_attachment_url_signature(self.file_id, str(expires), signature)
+        assert not validate_attachment_url_signature("not-a-uuid", "9999999999", "x")

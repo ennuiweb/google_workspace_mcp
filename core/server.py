@@ -719,25 +719,53 @@ async def health_check(request: Request):
 @server.custom_route("/attachments/{file_id}", methods=["GET"])
 async def serve_attachment(request: Request):
     """Serve a stored attachment file."""
-    from core.attachment_storage import get_attachment_storage
+    from core.attachment_storage import (
+        external_attachment_url_configured,
+        get_attachment_storage,
+        is_valid_attachment_id,
+        validate_attachment_url_signature,
+    )
 
+    cache_headers = {"Cache-Control": "private, no-store"}
     file_id = request.path_params["file_id"]
+    # Validate before touching attachment metadata so route input cannot be used
+    # to probe or influence storage lookups.
+    if not is_valid_attachment_id(file_id):
+        return JSONResponse(
+            {"error": "Invalid attachment ID"}, status_code=404, headers=cache_headers
+        )
+    if external_attachment_url_configured() and not validate_attachment_url_signature(
+        file_id,
+        request.query_params.get("expires"),
+        request.query_params.get("signature"),
+    ):
+        return JSONResponse(
+            {"error": "Invalid or expired attachment URL"},
+            status_code=403,
+            headers=cache_headers,
+        )
+
     storage = get_attachment_storage()
     metadata = storage.get_attachment_metadata(file_id)
 
     if not metadata:
         return JSONResponse(
-            {"error": "Attachment not found or expired"}, status_code=404
+            {"error": "Attachment not found or expired"},
+            status_code=404,
+            headers=cache_headers,
         )
 
     file_path = storage.get_attachment_path(file_id)
     if not file_path:
-        return JSONResponse({"error": "Attachment file not found"}, status_code=404)
+        return JSONResponse(
+            {"error": "Attachment file not found"}, status_code=404, headers=cache_headers
+        )
 
     return FileResponse(
         path=str(file_path),
         filename=metadata["filename"],
         media_type=metadata["mime_type"],
+        headers=cache_headers,
     )
 
 
