@@ -9,6 +9,13 @@ from core.server import serve_attachment
 
 
 FILE_ID = "123e4567-e89b-12d3-a456-426614174000"
+SIGNING_SECRET = "test-secret-at-least-thirty-two-bytes-long"
+
+
+def _signed_query(file_id: str = FILE_ID) -> bytes:
+    expires = int(time.time()) + 60
+    signature = _attachment_signature(file_id, expires, SIGNING_SECRET.encode())
+    return f"expires={expires}&signature={signature}".encode()
 
 
 def _build_request(file_id: str, query_string: bytes = b"") -> Request:
@@ -35,6 +42,7 @@ def _build_request(file_id: str, query_string: bytes = b"") -> Request:
 
 @pytest.mark.asyncio
 async def test_serve_attachment_uses_path_param_file_id(monkeypatch, tmp_path):
+    monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", SIGNING_SECRET)
     file_path = tmp_path / "sample.pdf"
     file_path.write_bytes(b"%PDF-1.3\n")
     captured = {}
@@ -51,7 +59,7 @@ async def test_serve_attachment_uses_path_param_file_id(monkeypatch, tmp_path):
         "core.attachment_storage.get_attachment_storage", lambda: DummyStorage()
     )
 
-    response = await serve_attachment(_build_request(FILE_ID))
+    response = await serve_attachment(_build_request(FILE_ID, _signed_query()))
 
     assert captured["file_id"] == FILE_ID
     assert isinstance(response, FileResponse)
@@ -61,6 +69,8 @@ async def test_serve_attachment_uses_path_param_file_id(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_serve_attachment_404_when_metadata_missing(monkeypatch):
+    monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", SIGNING_SECRET)
+
     class DummyStorage:
         def get_attachment_metadata(self, _file_id):
             return None
@@ -69,7 +79,7 @@ async def test_serve_attachment_404_when_metadata_missing(monkeypatch):
         "core.attachment_storage.get_attachment_storage", lambda: DummyStorage()
     )
 
-    response = await serve_attachment(_build_request(FILE_ID))
+    response = await serve_attachment(_build_request(FILE_ID, _signed_query()))
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == 404
@@ -94,9 +104,28 @@ async def test_serve_attachment_rejects_invalid_id_before_storage_lookup(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_serve_attachment_rejects_when_signing_secret_is_missing(monkeypatch):
+    monkeypatch.delenv("WORKSPACE_EXTERNAL_URL", raising=False)
+    monkeypatch.delenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", raising=False)
+
+    class DummyStorage:
+        def get_attachment_metadata(self, _file_id):
+            raise AssertionError("storage must not be queried without a signing secret")
+
+    monkeypatch.setattr(
+        "core.attachment_storage.get_attachment_storage", lambda: DummyStorage()
+    )
+
+    response = await serve_attachment(_build_request(FILE_ID))
+
+    assert response.status_code == 403
+    assert response.headers["cache-control"] == "private, no-store"
+
+
+@pytest.mark.asyncio
 async def test_serve_attachment_requires_valid_signature_for_external_url(monkeypatch):
     monkeypatch.setenv("WORKSPACE_EXTERNAL_URL", "https://mcp.example.test")
-    monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "test-secret")
+    monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", SIGNING_SECRET)
 
     class DummyStorage:
         def get_attachment_metadata(self, _file_id):
@@ -118,8 +147,5 @@ async def test_serve_attachment_requires_valid_signature_for_external_url(monkey
     monkeypatch.setattr(
         "core.attachment_storage.get_attachment_storage", lambda: ValidTokenStorage()
     )
-    expires = int(time.time()) + 60
-    signature = _attachment_signature(FILE_ID, expires, b"test-secret")
-    query = f"expires={expires}&signature={signature}".encode()
-    response = await serve_attachment(_build_request(FILE_ID, query))
+    response = await serve_attachment(_build_request(FILE_ID, _signed_query()))
     assert response.status_code == 404

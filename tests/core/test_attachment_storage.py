@@ -60,10 +60,11 @@ class TestSanitizeAttachmentFilename:
 
 class TestExternalAttachmentUrls:
     file_id = "123e4567-e89b-12d3-a456-426614174000"
+    signing_secret = "test-secret-at-least-thirty-two-bytes-long"
 
     def test_external_url_is_signed_and_short_lived(self, monkeypatch):
         monkeypatch.setenv("WORKSPACE_EXTERNAL_URL", "https://mcp.example.test/")
-        monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "test-secret")
+        monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", self.signing_secret)
 
         url = get_attachment_url(self.file_id)
         parsed = urlparse(url)
@@ -84,10 +85,12 @@ class TestExternalAttachmentUrls:
         with pytest.raises(RuntimeError, match="not configured"):
             get_attachment_url(self.file_id)
 
-    def test_signature_rejects_expired_and_noncanonical_ids(self, monkeypatch):
-        monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "test-secret")
+    def test_signature_rejects_expired_noncanonical_and_weak_secret(self, monkeypatch):
+        monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", self.signing_secret)
         expires = int(time.time()) - 1
-        signature = _attachment_signature(self.file_id, expires, b"test-secret")
+        signature = _attachment_signature(self.file_id, expires, self.signing_secret.encode())
 
         assert not validate_attachment_url_signature(self.file_id, str(expires), signature)
         assert not validate_attachment_url_signature("not-a-uuid", "9999999999", "x")
+        monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "too-short")
+        assert not validate_attachment_url_signature(self.file_id, "9999999999", "x")

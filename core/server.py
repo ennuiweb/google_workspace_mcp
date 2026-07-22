@@ -720,7 +720,6 @@ async def health_check(request: Request):
 async def serve_attachment(request: Request):
     """Serve a stored attachment file."""
     from core.attachment_storage import (
-        external_attachment_url_configured,
         get_attachment_storage,
         is_valid_attachment_id,
         validate_attachment_url_signature,
@@ -734,7 +733,7 @@ async def serve_attachment(request: Request):
         return JSONResponse(
             {"error": "Invalid attachment ID"}, status_code=404, headers=cache_headers
         )
-    if external_attachment_url_configured() and not validate_attachment_url_signature(
+    if not validate_attachment_url_signature(
         file_id,
         request.query_params.get("expires"),
         request.query_params.get("signature"),

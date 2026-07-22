@@ -295,8 +295,11 @@ def _external_attachment_url_configured() -> bool:
 
 
 def _attachment_signing_secret() -> Optional[bytes]:
-    secret = os.getenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "")
-    return secret.encode("utf-8") if secret else None
+    """Return a sufficiently strong attachment URL signing secret, if configured."""
+    secret = os.getenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "").strip()
+    # URLs are bearer credentials. Require a high-entropy secret of at least
+    # 32 bytes instead of accepting trivially guessable configuration values.
+    return secret.encode("utf-8") if len(secret.encode("utf-8")) >= 32 else None
 
 
 def _attachment_signature(file_id: str, expires: int, secret: bytes) -> str:
@@ -343,19 +346,21 @@ def get_attachment_url(file_id: str) -> str:
     if not is_valid_attachment_id(file_id):
         raise ValueError("Attachment ID must be a canonical UUID")
 
-    # Use external URL if set (for reverse proxy scenarios). Never issue a public
-    # URL without its required capability token.
+    # Use a signed URL whenever a signing secret is available. Streamable HTTP
+    # routes require this signature even on loopback; only stdio's callback route
+    # supports unsigned local URLs.
     external_url = os.getenv("WORKSPACE_EXTERNAL_URL", "").strip()
-    if external_url:
-        secret = _attachment_signing_secret()
-        if not secret:
-            logger.error(
-                "WORKSPACE_EXTERNAL_URL is set but WORKSPACE_ATTACHMENT_SIGNING_SECRET is missing; refusing to issue attachment URL"
-            )
-            raise RuntimeError("External attachment downloads are not configured")
+    secret = _attachment_signing_secret()
+    if external_url and not secret:
+        logger.error(
+            "WORKSPACE_EXTERNAL_URL is set but WORKSPACE_ATTACHMENT_SIGNING_SECRET is missing or weak; refusing to issue attachment URL"
+        )
+        raise RuntimeError("External attachment downloads are not configured")
+    if secret:
         expires = int(time.time()) + ATTACHMENT_URL_EXPIRATION_SECONDS
         signature = _attachment_signature(file_id, expires, secret)
-        return f"{external_url.rstrip('/')}/attachments/{file_id}?{urlencode({'expires': expires, 'signature': signature})}"
+        base_url = external_url.rstrip("/") if external_url else f"{WORKSPACE_MCP_BASE_URI}:{WORKSPACE_MCP_PORT}"
+        return f"{base_url}/attachments/{file_id}?{urlencode({'expires': expires, 'signature': signature})}"
 
     # In stdio mode the attachment route is served by the lazily-started callback
     # server; bring it up now so the URL we hand out is actually reachable. The

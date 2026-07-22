@@ -299,7 +299,9 @@ def test_oauth_callback_missing_state_fallback_follows_single_user_mode(monkeypa
 def test_stdio_attachment_route_requires_signature_in_external_url_mode(monkeypatch):
     file_id = "123e4567-e89b-12d3-a456-426614174000"
     monkeypatch.setenv("WORKSPACE_EXTERNAL_URL", "https://mcp.example.test")
-    monkeypatch.setenv("WORKSPACE_ATTACHMENT_SIGNING_SECRET", "test-secret")
+    monkeypatch.setenv(
+        "WORKSPACE_ATTACHMENT_SIGNING_SECRET", "test-secret-at-least-thirty-two-bytes-long"
+    )
 
     class DummyStorage:
         def get_attachment_metadata(self, _file_id):
