@@ -12,7 +12,9 @@ The shallow `/health` endpoint remains a Docker readiness check. It is intention
 
 ## Deploy
 
-Before production rollout, run the unit suite and build the image. Preserve the current revision and image ID for rollback. Roll out personal first, verify its protocol probe and a read-only Google tool, then repeat for business. Start the host rollout through the transient systemd wrapper so an SSH disconnect cannot leave a recreated container stopped.
+Before production rollout, run the unit suite and build the image. The deploy script refuses to build unless the root filesystem has at least 5 GiB free (`MIN_ROOT_FREE_BYTES` can override this for isolated test hosts), and takes a nonblocking host lock so concurrent rollouts fail safely. Preserve the current revision and image ID for rollback. Roll out personal first, verify its protocol probe and a read-only Google tool, then repeat for business. Start the host rollout through the transient systemd wrapper so an SSH disconnect cannot leave a recreated container stopped.
+
+After both services pass health, protocol, and tool smokes, the script retains exactly the rollback generation captured for that rollout per service, removes older `workspace-mcp-rollback` tags, and runs `docker builder prune --force`. It never prunes volumes or unrelated images. No cleanup occurs if validation fails; the active service is recreated from its captured image instead.
 
 ```bash
 uv sync --locked --extra dev
@@ -52,6 +54,6 @@ Nginx must route `^~ /attachments/` directly to that account's loopback backend,
 
 ## Rollback
 
-Checkout the recorded pre-deploy revision, restore its Compose file if necessary, rebuild, and recreate only the affected service. Do not delete or replace `business/data`, `personal/data`, `.env.business`, `.env.personal`, or `client_secret.json`; those are host-owned state and secrets.
+If a health, protocol, or tool smoke fails, the deploy script automatically retags the captured image and recreates the affected service; cleanup is skipped. For a manual rollback, use the retained `workspace-mcp-rollback:<timestamp>-<service>` tag as the service image, then recreate only that service. Checkout the recorded pre-deploy revision, restore its Compose file if necessary, rebuild, and recreate only the affected service. Do not delete or replace `business/data`, `personal/data`, `.env.business`, `.env.personal`, or `client_secret.json`; those are host-owned state and secrets.
 
 The watchdog state is diagnostic only. A corrupt state file fails safe to an empty state, and deleting it is not required for application rollback.
