@@ -14,7 +14,7 @@ services:
       - ./client_secret.json:/app/client_secret.json:ro
       - ./business/data:/data
     entrypoint: [".venv/bin/python", "main.py"]
-    command: ["--transport", "streamable-http", "--single-user", "--tools", "gmail", "drive", "docs", "sheets", "contacts"]
+    command: ["--transport", "streamable-http", "--single-user", "--permissions", "gmail:drafts", "drive:full", "docs:full", "sheets:full", "contacts:full"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
       interval: 30s
@@ -44,7 +44,7 @@ services:
       - ./client_secret.json:/app/client_secret.json:ro
       - ./personal/data:/data
     entrypoint: [".venv/bin/python", "main.py"]
-    command: ["--transport", "streamable-http", "--single-user", "--tools", "gmail", "drive", "docs", "sheets", "slides", "calendar", "tasks", "contacts"]
+    command: ["--transport", "streamable-http", "--single-user", "--permissions", "gmail:drafts", "drive:full", "docs:full", "sheets:full", "slides:full", "calendar:full", "tasks:full", "contacts:full"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
       interval: 30s
