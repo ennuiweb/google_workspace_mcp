@@ -10,14 +10,16 @@
 
 - Global rules in `/Users/oskar/.agents/AGENTS.md` apply by default.
 - This file adds only fork and deployment-specific rules.
+- If repo identity, role, path, or workspace mapping changes durably, update both this file and `/Users/oskar/.agents/.aimemory/repos.toml` in the same task.
 
 ## Repo-local Rules
 
 - Keep `upstream` pointed at `taylorwilsdon/google_workspace_mcp` and `origin` pointed at `ennuiweb/google_workspace_mcp`.
 - The business and personal services are fixed-account deployments; do not broaden account routing.
-- Never commit `.env.*`, Google OAuth client secrets, credential stores, attachments, or runtime health state.
+- Never commit real `.env.*` files (the tracked `.env.oauth21` is an upstream placeholder template and must stay placeholder-only), Google OAuth client secrets, credential stores, attachments, or runtime health state.
 - Production changes require tests, image rebuild, staged container rollout, protocol-level MCP probes, Google read smokes, and public OAuth-edge validation.
-- Pin the MCP SDK maintenance revision exactly; do not float a Git dependency used in production.
+- Pin the MCP SDK maintenance revision exactly (fork: `/Users/oskar/repo/mcp-python-sdk`); do not float a Git dependency used in production.
+- Tests: `.venv/bin/python -m pytest -q`; follow `ops/README.md` for every production step.
 
 ## Local Context Map
 
@@ -32,5 +34,5 @@
 ## Self-maintenance Rules
 
 - Update `.aimemory/memory.md` when the production revision, dependency pin, watchdog behavior, or deployment topology changes.
-- Update the Hetzner operations repo when URLs, ports, services, deploy paths, or recovery commands change.
-- If repo identity or role changes, update the global registry and this file together.
+- Update the Hetzner operations repo (`/Users/oskar/repo/hetzner`) when URLs, ports, services, deploy paths, or recovery commands change.
+- After changing this curated repo's `AGENTS.md`, run `oskar-agents-lint` through the Bridge project (`/Users/oskar/repo/oskar-memory-bridge`).
